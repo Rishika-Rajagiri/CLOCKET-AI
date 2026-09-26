@@ -2,12 +2,5 @@
     "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
     "code-runner.executorMap": {
         "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe -u"
-    },
-    "python-envs.pythonProjects": [
-        {
-            "path": ".",
-            "envManager": "ms-python.python:venv",
-            "packageManager": "ms-python.python:pip"
-        }
-    ]
+    }
 }

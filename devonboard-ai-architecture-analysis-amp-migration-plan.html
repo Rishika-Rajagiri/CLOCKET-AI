@@ -1,0 +1,486 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DevOnboard AI — Migration Analysis</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.65; color: #1f2328; background: #ffffff; padding: 32px 16px 64px; }
+  .page { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; color: #1f2328; margin-bottom: 4px; }
+  .subtitle { color: #57606a; font-size: 13px; margin-bottom: 32px; }
+  h2 { font-size: 15px; font-weight: 700; color: #1f2328; margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; }
+  h3 { font-size: 13px; font-weight: 600; color: #3b82d4; margin: 14px 0 6px; }
+  p { margin-bottom: 8px; color: #1f2328; }
+  ul, ol { padding-left: 18px; margin-bottom: 8px; }
+  li { margin-bottom: 3px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-right: 4px; margin-bottom: 3px; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-purple { background: #ede9fe; color: #5b21b6; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  th { background: #f7f8fa; text-align: left; padding: 7px 10px; border: 1px solid #e5e7eb; font-weight: 600; }
+  td { padding: 6px 10px; border: 1px solid #e5e7eb; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+  code { font-family: "Consolas","Menlo","Courier New",monospace; font-size: 12px; background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 3px; padding: 1px 5px; }
+  pre { background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; overflow-x: auto; font-size: 12px; font-family: "Consolas","Menlo","Courier New",monospace; margin-bottom: 12px; }
+  .section { margin-bottom: 32px; }
+  .callout { background: #f0f9ff; border-left: 3px solid #3b82d4; padding: 10px 14px; border-radius: 0 4px 4px 0; margin-bottom: 12px; }
+  .callout-warn { background: #fffbeb; border-left-color: #f59e0b; }
+  .callout-green { background: #f0fdf4; border-left-color: #22c55e; }
+  .phase { border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; }
+  .phase-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .row-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  @media (max-width: 540px) { .row-grid { grid-template-columns: 1fr; } }
+  .card { background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; }
+  .card-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #3b82d4; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #57606a; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>DevOnboard AI — Architecture Analysis &amp; Migration Plan</h1>
+<p class="subtitle">Codebase inspection of CLOCKET-AI / Personal Assistant · Transformation roadmap to DevOnboard AI</p>
+
+
+<div class="section">
+<h2>A · Existing Architecture (CLOCKET-AI)</h2>
+<div class="callout">
+  <strong>Current product:</strong> Multi-agent personal assistant with task management, RAG over uploaded documents, and Git repository inspection. Single FastAPI + React/Vite app, deployed via Docker on Render, backed by Supabase.
+</div>
+
+<table>
+  <tr><th>Layer</th><th>Technology</th><th>Location</th></tr>
+  <tr><td>API</td><td>FastAPI + Uvicorn + SlowAPI (rate limiting)</td><td><code>app/main.py</code></td></tr>
+  <tr><td>Auth</td><td>Supabase email/password + Bearer token + RLS</td><td><code>app/core/security.py</code>, <code>app/routes/auth.py</code></td></tr>
+  <tr><td>Orchestration</td><td>LangGraph StateGraph — 3 nodes: git / task / rag</td><td><code>agent/graph/orchestrator/orchestrator.py</code></td></tr>
+  <tr><td>Git Agent</td><td>LangChain AgentExecutor + mcp-server-git tools</td><td><code>agent/graph/git_agent.py</code>, <code>agent/graph/git_router.py</code></td></tr>
+  <tr><td>Task Agent</td><td>LangChain AgentExecutor + custom Task MCP tools</td><td><code>agent/graph/task_agent.py</code>, <code>mcp_server/tools.py</code></td></tr>
+  <tr><td>RAG</td><td>fastembed BAAI/bge-small-en-v1.5 · pgvector · SupabaseRetriever</td><td><code>agent/rag/</code></td></tr>
+  <tr><td>Memory</td><td>Mem0 long-term memory (per-user, toggleable)</td><td><code>agent/memory/agent_memory.py</code></td></tr>
+  <tr><td>LLM Gateway</td><td>Groq (ChatGroq) with model fallback from config.yml</td><td><code>llm_gateway/provider/groq_llm.py</code></td></tr>
+  <tr><td>Frontend</td><td>React + Vite (single main.jsx, no router)</td><td><code>app/frontend/src/main.jsx</code></td></tr>
+  <tr><td>Persistence</td><td>Supabase: tasks, conversations, messages, rag_documents</td><td><code>app/services/presistence.py</code></td></tr>
+  <tr><td>Tracing</td><td>LangSmith (@traceable, trace_config)</td><td><code>app/core/tracing.py</code></td></tr>
+  <tr><td>Deployment</td><td>Docker (multi-stage) + Supervisor + Render</td><td><code>Dockerfile</code>, <code>render.yaml</code>, <code>docker/</code></td></tr>
+  <tr><td>MCP</td><td>FastMCP task-manager server (stdio/streamable-http)</td><td><code>mcp_server/tools.py</code></td></tr>
+  <tr><td>Git MCP</td><td>mcp-server-git via MultiServerMCPClient</td><td><code>mcp_server/server/git_server.py</code></td></tr>
+</table>
+
+<p><strong>LangGraph graph:</strong> <code>START → load_memory → route_request → [git|task|rag] → save_memory → END</code></p>
+<p><strong>Routing:</strong> Deterministic keyword matching first; LLM structured output as fallback.</p>
+<p><strong>RAG schema:</strong> <code>rag_documents(id, user_id, source, content, chunk_id, embedding vector(384))</code> — filtered by <code>user_id</code> only.</p>
+</div>
+
+
+<div class="section">
+<h2>B · Reusable Components (100% kept as-is or minimally modified)</h2>
+<div class="row-grid">
+  <div class="card">
+    <div class="card-title">Auth &amp; Security</div>
+    <span class="badge badge-green">KEEP</span>
+    <ul>
+      <li><code>app/core/security.py</code> — Supabase bearer token, <code>get_authenticated_user_id</code></li>
+      <li><code>app/routes/auth.py</code> — signup/login/me endpoints</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">FastAPI App Skeleton</div>
+    <span class="badge badge-green">KEEP</span>
+    <ul>
+      <li><code>app/main.py</code> — CORS, rate limiting, headers, static serving</li>
+      <li>All middleware stays identical</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">LLM Gateway</div>
+    <span class="badge badge-green">KEEP</span>
+    <ul>
+      <li><code>llm_gateway/provider/groq_llm.py</code> — <code>get_model()</code> cached, model fallback</li>
+      <li><code>app/core/config.yml</code> — model list</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">RAG Infrastructure</div>
+    <span class="badge badge-amber">EXTEND</span>
+    <ul>
+      <li><code>agent/rag/loading.py</code> — DocumentChunk, load_documents, chunk_documents</li>
+      <li><code>agent/rag/retriever/retrieval.py</code> — SupabaseRetriever (add repository_id filter)</li>
+      <li><code>agent/rag/generator/generation.py</code> — generate_answer (add source citations)</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">Tracing</div>
+    <span class="badge badge-green">KEEP</span>
+    <ul>
+      <li><code>app/core/tracing.py</code> — <code>trace_config()</code>, <code>tracing_enabled()</code></li>
+      <li>Update service name tag to "devonboard-ai"</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">Chat Persistence</div>
+    <span class="badge badge-green">KEEP</span>
+    <ul>
+      <li><code>app/services/presistence.py</code> — conversations + messages</li>
+      <li>Used for Q&amp;A chat history</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">Task MCP Server</div>
+    <span class="badge badge-green">KEEP</span>
+    <ul>
+      <li><code>mcp_server/tools.py</code> — add/get/update/complete/delete tasks</li>
+      <li>Used for onboarding task progress tracking</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">Git Router / Cloner</div>
+    <span class="badge badge-amber">EXTEND</span>
+    <ul>
+      <li><code>agent/graph/git_router.py</code> — clone_repo(), is_github_url()</li>
+      <li>Reuse for repo cloning in analysis pipeline</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">Docker / Render / Supervisor</div>
+    <span class="badge badge-amber">EXTEND</span>
+    <ul>
+      <li><code>Dockerfile</code>, <code>render.yaml</code>, <code>docker/</code> — add GitHub MCP env vars</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-title">Health Check</div>
+    <span class="badge badge-green">KEEP</span>
+    <ul>
+      <li><code>app/routes/health.py</code> — unchanged</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+
+<div class="section">
+<h2>C · Components Requiring Modification</h2>
+<table>
+  <tr><th>Component</th><th>Change</th></tr>
+  <tr><td><code>agent/rag/retriever/retrieval.py</code></td><td>Add <code>repository_id</code> column to index/search; update <code>match_rag_documents</code> RPC to filter by <code>user_id + repository_id</code></td></tr>
+  <tr><td><code>agent/rag/loading.py</code></td><td>Extend supported suffixes to cover more languages (Java, Go, C++, Kotlin, etc.); add file size guard</td></tr>
+  <tr><td><code>agent/rag/generator/generation.py</code></td><td>Format source citations as structured file references for DevOnboard Q&amp;A</td></tr>
+  <tr><td><code>app/main.py</code></td><td>Register new routers: <code>/repositories</code>, <code>/analysis</code>, <code>/onboarding</code></td></tr>
+  <tr><td><code>app/core/tracing.py</code></td><td>Update service tag from "personal-assistant" to "devonboard-ai"</td></tr>
+  <tr><td><code>app/services/chat_services.py</code></td><td>Add DevOnboard-specific Q&amp;A path that bypasses orchestrator routing (direct RAG with repo filter)</td></tr>
+  <tr><td><code>supabase/rag.sql</code></td><td>Add <code>repository_id</code>, <code>file_path</code>, <code>language</code>, <code>chunk_type</code>, <code>commit_sha</code> columns; update indexes and RPC</td></tr>
+  <tr><td><code>render.yaml</code></td><td>Add <code>GITHUB_TOKEN</code>, <code>GITHUB_MCP_*</code> env vars; rename service</td></tr>
+  <tr><td><code>.env.example</code></td><td>Add new env vars for GitHub MCP and DevOnboard config</td></tr>
+  <tr><td><code>app/frontend/src/main.jsx</code></td><td>Replace with full multi-page React dashboard (9 pages)</td></tr>
+  <tr><td><code>app/frontend/package.json</code></td><td>Add react-router-dom, recharts / d3 for architecture graph</td></tr>
+</table>
+</div>
+
+
+<div class="section">
+<h2>D · Missing Components (New builds required)</h2>
+<table>
+  <tr><th>Component</th><th>File(s)</th><th>Notes</th></tr>
+  <tr><td>Repository analysis LangGraph workflow</td><td><code>agent/graph/onboarding/workflow.py</code></td><td>15-node pipeline from URL → persisted analysis</td></tr>
+  <tr><td>Static repository scanner</td><td><code>agent/analysis/scanner.py</code></td><td>Deterministic language/framework/file detection</td></tr>
+  <tr><td>Architecture analyzer</td><td><code>agent/analysis/architecture.py</code></td><td>LLM-assisted architecture JSON generation</td></tr>
+  <tr><td>Setup guide generator</td><td><code>agent/analysis/setup_guide.py</code></td><td>Evidence-based setup steps</td></tr>
+  <tr><td>Starter task generator</td><td><code>agent/analysis/task_generator.py</code></td><td>Tasks grounded in real files</td></tr>
+  <tr><td>GitHub MCP client</td><td><code>mcp_server/server/github_server.py</code></td><td>Official GitHub MCP server adapter</td></tr>
+  <tr><td>DevOnboard MCP tools</td><td><code>mcp_server/devonboard_tools.py</code></td><td>save_repository_analysis, get_onboarding_progress, update_onboarding_task</td></tr>
+  <tr><td>Repository API route</td><td><code>app/routes/repositories.py</code></td><td>CRUD for repositories table</td></tr>
+  <tr><td>Analysis API route</td><td><code>app/routes/analysis.py</code></td><td>Trigger analysis, get results, status polling</td></tr>
+  <tr><td>Onboarding API route</td><td><code>app/routes/onboarding.py</code></td><td>Tasks, progress, Q&amp;A endpoints</td></tr>
+  <tr><td>New Supabase tables</td><td><code>supabase/repositories.sql</code>, <code>supabase/analysis.sql</code>, <code>supabase/onboarding.sql</code></td><td>repositories, repository_analysis, onboarding_tasks, onboarding_progress</td></tr>
+  <tr><td>Full React dashboard</td><td><code>app/frontend/src/</code> (multi-file)</td><td>9 pages with routing, architecture graph, task tracker</td></tr>
+</table>
+</div>
+
+
+<div class="section">
+<h2>E · Proposed Final Architecture</h2>
+<pre>
+React/Vite (9 pages)
+  ↓  Bearer token
+FastAPI (app/main.py)
+  ├── /auth/*          ← unchanged Supabase auth
+  ├── /repositories/*  ← NEW: CRUD for tracked repos
+  ├── /analysis/*      ← NEW: trigger analysis, poll status, get results
+  ├── /onboarding/*    ← NEW: tasks, progress, Q&amp;A
+  ├── /chat/*          ← unchanged conversation history
+  ├── /rag/*           ← unchanged file upload
+  └── /health          ← unchanged
+
+  ↓  async calls
+LangGraph Orchestrators
+  ├── Onboarding Workflow (agent/graph/onboarding/workflow.py)
+  │   ├── validate_github_url
+  │   ├── get_repository_info      ← GitHub MCP
+  │   ├── read_repository_tree     ← GitHub MCP
+  │   ├── detect_technology_stack  ← static scanner
+  │   ├── analyze_important_files  ← GitHub MCP + scanner
+  │   ├── analyze_dependencies     ← static scanner
+  │   ├── analyze_configuration    ← static scanner
+  │   ├── analyze_apis             ← LLM
+  │   ├── analyze_database         ← static scanner + LLM
+  │   ├── analyze_architecture     ← LLM
+  │   ├── index_into_rag           ← SupabaseRetriever (extended)
+  │   ├── generate_setup_guide     ← LLM
+  │   ├── generate_onboarding_plan ← LLM
+  │   ├── generate_starter_tasks   ← LLM
+  │   └── persist_results          ← Supabase
+  │
+  └── Q&amp;A Handler (existing RAG pipeline, repo-filtered)
+       ├── repository-filtered retrieval (user_id + repository_id)
+       ├── pgvector similarity search
+       ├── LLM grounded answer
+       └── source file citations
+
+Tools used
+  ├── GitHub MCP Server (official) — repo info, tree, file contents, search
+  ├── mcp-server-git — local git ops (kept for chat/git agent)
+  └── Task MCP Server — onboarding task progress tracking
+
+Data stores
+  └── Supabase PostgreSQL + pgvector
+      ├── auth.users            (Supabase managed)
+      ├── repositories          (NEW)
+      ├── repository_analysis   (NEW)
+      ├── onboarding_tasks      (NEW)
+      ├── onboarding_progress   (NEW)
+      ├── rag_documents         (EXTENDED: +repository_id, +file_path, +language, +chunk_type, +commit_sha)
+      ├── tasks                 (kept — general task manager)
+      ├── conversations         (kept — chat history)
+      └── messages              (kept — chat messages)
+</pre>
+</div>
+
+
+<div class="section">
+<h2>F · Database Changes</h2>
+
+<h3>New table: repositories</h3>
+<pre>
+id            uuid  PK default gen_random_uuid()
+user_id       uuid  FK auth.users  (RLS owner)
+github_url    text  NOT NULL
+owner         text  NOT NULL
+name          text  NOT NULL
+default_branch text NOT NULL default 'main'
+commit_sha    text
+status        text  default 'pending'  -- pending|analyzing|ready|failed
+created_at    timestamptz default now()
+updated_at    timestamptz default now()
+UNIQUE (user_id, github_url)
+</pre>
+
+<h3>New table: repository_analysis</h3>
+<pre>
+id                uuid  PK
+repository_id     uuid  FK repositories(id)
+architecture      jsonb   -- {frontend,backend,database,external_services,...}
+technology_stack  jsonb   -- {languages,frameworks,infrastructure}
+dependencies      jsonb
+configuration     jsonb
+apis              jsonb
+database_info     jsonb
+setup_guide       jsonb   -- [{step,command,description}]
+setup_issues      jsonb   -- potential problems
+onboarding_plan   text
+generated_at      timestamptz
+</pre>
+
+<h3>New table: onboarding_tasks</h3>
+<pre>
+id                  uuid  PK
+repository_id       uuid  FK repositories(id)
+title               text
+description         text
+difficulty          text  -- beginner|intermediate|advanced
+estimated_effort    text
+skills              text[]
+files_involved      text[]
+reason              text
+acceptance_criteria text[]
+status              text  default 'todo'  -- todo|in_progress|done|skipped
+created_at          timestamptz
+</pre>
+
+<h3>New table: onboarding_progress</h3>
+<pre>
+id              uuid  PK
+user_id         uuid  FK auth.users
+repository_id   uuid  FK repositories(id)
+task_id         uuid  FK onboarding_tasks(id)
+status          text
+notes           text
+updated_at      timestamptz
+UNIQUE (user_id, task_id)
+</pre>
+
+<h3>Extended table: rag_documents</h3>
+<pre>
++ repository_id  uuid  nullable FK repositories(id)
++ file_path      text  nullable   -- relative path within repo
++ language       text  nullable   -- python, typescript, etc.
++ chunk_type     text  nullable   -- code, doc, config
++ commit_sha     text  nullable
+Updated UNIQUE: (user_id, source, chunk_id, repository_id)
+Updated RPC: match_rag_documents now accepts optional match_repository_id
+</pre>
+</div>
+
+
+<div class="section">
+<h2>G · MCP Changes</h2>
+<table>
+  <tr><th>MCP</th><th>Action</th><th>Used for</th></tr>
+  <tr><td>mcp-server-git</td><td><span class="badge badge-green">KEEP</span></td><td>Git chat agent — git status, diff, log, branches</td></tr>
+  <tr><td>Task MCP (mcp_server/tools.py)</td><td><span class="badge badge-green">KEEP</span></td><td>General task manager, onboarding task status updates</td></tr>
+  <tr><td><strong>GitHub MCP Server (official)</strong></td><td><span class="badge badge-blue">ADD</span></td><td>Repository info, tree, file content, code search, commits, PRs</td></tr>
+  <tr><td><strong>DevOnboard MCP (mcp_server/devonboard_tools.py)</strong></td><td><span class="badge badge-blue">ADD</span></td><td>save_repository_analysis, get_onboarding_progress, update_onboarding_task, analyze_repository trigger</td></tr>
+</table>
+
+<div class="callout">
+  <strong>GitHub MCP usage:</strong> The official <code>github/github-mcp-server</code> Docker image is used via <code>MultiServerMCPClient</code> (same pattern as mcp-server-git). It provides: <code>get_repository</code>, <code>get_file_contents</code>, <code>get_tree</code>, <code>search_code</code>, <code>list_commits</code>, <code>list_branches</code>, <code>list_pull_requests</code>. No custom tool is built for functionality already in GitHub MCP.
+</div>
+
+<h3>DevOnboard-specific MCP tools (new)</h3>
+<ul>
+  <li><code>analyze_repository(github_url, user_id)</code> — trigger full pipeline</li>
+  <li><code>save_repository_analysis(repository_id, analysis_json)</code> — persist structured analysis</li>
+  <li><code>get_onboarding_progress(user_id, repository_id)</code> — return task completion state</li>
+  <li><code>update_onboarding_task(task_id, user_id, status, notes)</code> — mark task progress</li>
+</ul>
+</div>
+
+
+<div class="section">
+<h2>H · LangGraph Onboarding Workflow</h2>
+<pre>
+State: OnboardingState {
+  github_url, user_id, repository_id,
+  repo_info, file_tree, important_files,
+  technology_stack, architecture,
+  dependencies, configuration, apis, database_info,
+  setup_guide, setup_issues, onboarding_plan,
+  starter_tasks, rag_indexed, error, status
+}
+
+START
+  ↓
+validate_github_url      ← pure Python, no LLM
+  ↓
+get_repository_info      ← GitHub MCP: get_repository
+  ↓
+read_repository_tree     ← GitHub MCP: get_tree (recursive, limited depth)
+  ↓
+detect_technology_stack  ← static scanner (deterministic, file extensions + filenames)
+  ↓
+analyze_important_files  ← GitHub MCP: get_file_contents for README, package.json,
+                            requirements.txt, Dockerfile, .env.example, etc.
+  ↓
+analyze_dependencies     ← static scanner (parse package.json, requirements.txt,
+                            pyproject.toml, pom.xml, go.mod, etc.)
+  ↓
+analyze_configuration    ← static scanner (.env.example, config files, render.yaml)
+  ↓
+analyze_apis             ← LLM reasoning over route files
+  ↓
+analyze_database         ← static scanner + LLM (*.sql, ORM models, connection strings)
+  ↓
+analyze_architecture     ← LLM: produces structured JSON architecture
+  ↓
+index_into_rag           ← SupabaseRetriever extended with repository_id
+  ↓
+generate_setup_guide     ← LLM: evidence-only from analyzed files
+  ↓
+generate_onboarding_plan ← LLM: personalized plan
+  ↓
+generate_starter_tasks   ← LLM: grounded tasks with real file references
+  ↓
+persist_results          ← Supabase insert/upsert
+  ↓
+END
+
+Error handling: each node catches exceptions, sets state.error,
+conditional edges skip to persist_results on failure.
+</pre>
+</div>
+
+
+<div class="section">
+<h2>I · Implementation Phases</h2>
+
+<div class="phase">
+  <div class="phase-title">Phase 1 — Database <span class="badge badge-amber">SQL only, no code risk</span></div>
+  <p>Create <code>supabase/repositories.sql</code>, <code>supabase/analysis.sql</code>, <code>supabase/onboarding.sql</code>. Extend <code>supabase/rag.sql</code> with new columns, updated RPC. All idempotent.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 2 — Backend Routes <span class="badge badge-blue">New files only</span></div>
+  <p>Add <code>app/routes/repositories.py</code>, <code>app/routes/analysis.py</code>, <code>app/routes/onboarding.py</code>. Register in <code>app/main.py</code>. Existing routes untouched.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 3 — DevOnboard MCP + GitHub MCP <span class="badge badge-blue">New file + minimal existing change</span></div>
+  <p>Add <code>mcp_server/devonboard_tools.py</code>. Add <code>mcp_server/server/github_server.py</code> (GitHub MCP adapter). Keep <code>mcp_server/tools.py</code> unchanged.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 4 — Analysis Agents <span class="badge badge-blue">New module: agent/analysis/</span></div>
+  <p>Build <code>agent/analysis/scanner.py</code> (deterministic), <code>agent/analysis/architecture.py</code>, <code>agent/analysis/setup_guide.py</code>, <code>agent/analysis/task_generator.py</code>.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 5 — LangGraph Onboarding Workflow <span class="badge badge-blue">New module: agent/graph/onboarding/</span></div>
+  <p>Build <code>agent/graph/onboarding/workflow.py</code> (15-node StateGraph). Integrate GitHub MCP, static scanner, RAG indexer. Wire to analysis route.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 6 — RAG Enhancements <span class="badge badge-amber">Minimal change to existing RAG files</span></div>
+  <p>Extend <code>agent/rag/retriever/retrieval.py</code> SupabaseRetriever to accept + filter by <code>repository_id</code>. Extend <code>agent/rag/loading.py</code> supported suffixes. Update <code>generation.py</code> source citations.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 7 — Frontend Dashboard <span class="badge badge-purple">Largest visible change</span></div>
+  <p>Replace <code>app/frontend/src/main.jsx</code> with multi-page React app (react-router-dom). 9 pages: Login, Dashboard, Add Repo, Repo Overview, Architecture, Setup Guide, Starter Tasks, Q&amp;A, Progress. Professional hackathon UI.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 8 — Config + Docs <span class="badge badge-green">Low risk</span></div>
+  <p>Update <code>.env.example</code>, <code>render.yaml</code>, <code>Dockerfile</code> (add GitHub MCP Docker image pull). Write new <code>README.md</code> with all 13 required hackathon sections.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-title">Phase 9 — Validation <span class="badge badge-green">Final gate</span></div>
+  <p>Run pytest, fix imports, verify frontend build (<code>npm run build</code>), verify API endpoints, verify Docker build, verify RAG filtering, manual smoke test of full onboarding pipeline.</p>
+</div>
+
+<div class="callout callout-green" style="margin-top:16px">
+  <strong>Zero-regression guarantee:</strong> All existing routes (/auth, /chat, /rag, /health) and their underlying agents remain completely functional. New features are additive only. The existing chat experience is preserved alongside the new DevOnboard features.
+</div>
+</div>
+
+
+<div class="section">
+<h2>Key New Environment Variables</h2>
+<table>
+  <tr><th>Variable</th><th>Required</th><th>Description</th></tr>
+  <tr><td><code>GITHUB_TOKEN</code></td><td>Yes</td><td>GitHub personal access token for GitHub MCP Server</td></tr>
+  <tr><td><code>GITHUB_MCP_TOOL_FILTER</code></td><td>No</td><td>Comma-list of allowed GitHub MCP tools (read-only subset)</td></tr>
+  <tr><td><code>ANALYSIS_MAX_FILE_SIZE_KB</code></td><td>No</td><td>Max file size to index (default 500 KB)</td></tr>
+  <tr><td><code>ANALYSIS_MAX_FILES</code></td><td>No</td><td>Max files to index per repo (default 200)</td></tr>
+  <tr><td><code>LANGSMITH_PROJECT</code></td><td>No</td><td>Update to <code>devonboard-ai</code></td></tr>
+</table>
+</div>
+
+<footer>Made with IBM Bob</footer>
+</div>
+</body>
+</html>

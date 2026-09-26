@@ -18,6 +18,8 @@ from app.routes.RAG import router as rag_router
 from app.routes.auth import router as auth_router
 from app.routes.chat import router as chat_router
 from app.routes.health import router as health_router
+from app.routes.repositories import router as repositories_router
+from app.routes.analysis import router as analysis_router
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["15/minute"])
 
@@ -27,7 +29,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-fastapi_app = FastAPI(title="Personal Assistant API", lifespan=lifespan)
+fastapi_app = FastAPI(title="DevOnboard AI", lifespan=lifespan)
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
 INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
@@ -120,3 +122,5 @@ fastapi_app.include_router(auth_router)
 fastapi_app.include_router(health_router)
 fastapi_app.include_router(rag_router)
 fastapi_app.include_router(chat_router)
+fastapi_app.include_router(repositories_router)
+fastapi_app.include_router(analysis_router)

@@ -1,5 +1,5 @@
 {
-  "name": "personal-assistant-frontend",
+  "name": "devonboard-ai-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -13,6 +13,7 @@
     "vite": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "react-router-dom": "latest",
     "lucide-react": "latest"
   }
 }
